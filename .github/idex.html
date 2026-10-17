@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="เวรยาม">
+<meta name="theme-color" content="#0b0d24">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="application-name" content="เวรยามคอกสัตว์">
+<title>เวรยามคอกสัตว์</title>
+<style>
+  :root { --bg:#0b0d24; --card:#161a3a; --line:#2a2f5e; --ink:#e9e7ff; --dim:#8c8fb8;
+          --moon:#f4e3a1; --safe:#6ee7b7; --bad:#ff4d6d; --warn:#ffb86b; --info:#7aa2ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:radial-gradient(circle at 85% 0%, #23285a, var(--bg) 55%); color:var(--ink); font-family: system-ui, "Noto Sans Thai", sans-serif; min-height:100vh; }
+  body.alarm { background:#3a0d1c; }
+  header { padding:14px 16px 4px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  h1 { margin:0; font-size:1.25rem; color:var(--moon); flex:1 1 200px; }
+  input, button { font:inherit; border-radius:10px; border:1px solid var(--line); background:#1d2250; color:var(--ink); padding:8px 12px; }
+  button { cursor:pointer; }
+  #status { width:100%; font-size:.85rem; color:var(--dim); } #status.ok { color:var(--safe); } #status.bad { color:var(--bad); }
+  main { padding:8px 16px; display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; }
+  h2 { margin:0 0 8px; font-size:.95rem; color:var(--moon); }
+  #guard { text-align:center; }
+  #moon { width:84px; height:84px; }
+  #state { font-size:1.6rem; font-weight:700; margin:4px 0; color:var(--safe); }
+  .alarm #state { color:var(--bad); }
+  #ack { display:none; width:100%; margin-top:8px; padding:14px; font-size:1.15rem; font-weight:700; background:var(--bad); border-color:var(--bad); color:#fff; }
+  .alarm #ack { display:block; }
+  .nums { display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; margin-top:10px; }
+  .num { background:#10132e; border-radius:10px; padding:8px; }
+  .num b { display:block; font-size:1.25rem; font-variant-numeric: tabular-nums; }
+  .num span { font-size:.72rem; color:var(--dim); }
+  #line { width:100%; height:110px; display:block; }
+  .legend { font-size:.75rem; color:var(--dim); }
+  #events { width:100%; border-collapse:collapse; font-size:.82rem; }
+  #events td { border-top:1px solid var(--line); padding:5px 4px; }
+  #events tr.intruder td { color:var(--bad); }
+  .wide { grid-column: 1 / -1; }
+  footer { padding:12px 16px 28px; color:var(--dim); font-size:.8rem; }
+  /* การ์ดใกล้รั้วสุดคืนนี้ */
+  #near .big { font-size:4rem; font-weight:700; line-height:1; text-align:center; color:var(--dim); font-variant-numeric: tabular-nums; transition:color .3s; }
+  #near .big small { font-size:1.2rem; font-weight:400; margin-left:6px; }
+  #near .lvl { text-align:center; margin:8px 0 12px; font-size:1.1rem; font-weight:600; color:var(--dim); transition:color .3s; }
+  #near .bar { height:8px; border-radius:4px; background:#10132e; overflow:hidden; }
+  #near .bar i { display:block; height:100%; width:0; background:var(--dim); transition:width .3s, background .3s; }
+  #near .row { display:flex; justify-content:space-between; margin-top:10px; font-size:.82rem; color:var(--dim); }
+  #near .row b { color:var(--ink); }
+  #nearReset { width:100%; margin-top:12px; }
+
+  /* ===== เรดาร์สแกน ===== */
+  #radarWrap { position:relative; max-width:300px; margin:0 auto; }
+  #radar { width:100%; display:block; }
+  #sweep { transform-origin:100px 100px; animation:spin 4s linear infinite; }
+  .alarm #sweep { animation-duration:1.2s; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .blip { animation:blipFade 12s ease-out forwards; }
+  .blip .ping { transform-box:fill-box; transform-origin:center; animation:ping 1.2s ease-out 3; }
+  @keyframes blipFade { 0% { opacity:1; } 100% { opacity:0; } }
+  @keyframes ping { from { transform:scale(1); opacity:.9; } to { transform:scale(4); opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { #sweep { animation-duration:12s; } .blip .ping { animation:none; } }
+
+  /* ===== มือถือ ===== */
+  html { -webkit-text-size-adjust:100%; }
+  body { padding-bottom:calc(96px + env(safe-area-inset-bottom)); -webkit-tap-highlight-color:transparent; }
+  header { padding-top:calc(14px + env(safe-area-inset-top)); }
+  input, button { min-height:44px; font-size:16px; touch-action:manipulation; }
+  button:active { transform:scale(.97); }
+  #team { flex:1 1 120px; min-width:0; }
+  main { grid-template-columns:repeat(auto-fit, minmax(min(100%,320px),1fr)); }
+  .table-wrap { overflow-x:auto; }
+  #events td:first-child { white-space:nowrap; }
+  #state { font-size:1.4rem; }
+  /* ปุ่มรับทราบลอยติดขอบล่าง กดด้วยนิ้วโป้งได้ */
+  #ack { display:none; position:fixed; left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom)); width:auto; z-index:20; margin:0; min-height:72px; font-size:1.3rem; border-radius:16px; box-shadow:0 8px 30px rgba(255,77,109,.5); animation:pulse 1s infinite; }
+  .alarm #ack { display:block; }
+  @keyframes pulse { 50% { box-shadow:0 8px 40px rgba(255,77,109,.95); } }
+  #sound.on { background:#1f6f54; border-color:var(--safe); }
+  #wakeBtn.on { background:#1f6f54; border-color:var(--safe); }
+  @media (max-width:420px) { #near .big { font-size:3.2rem; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>เวรยามคอกสัตว์กลางคืน</h1>
+  <input id="team" size="10" placeholder="team05" autocomplete="off" aria-label="เลขทีม">
+  <button id="go">ต่อ</button>
+  <button id="sound">เปิดเสียงเตือน</button>
+  <button id="wakeBtn">กันจอดับ</button>
+  <div id="status">ใส่เลขทีม แล้วกด “ต่อ”</div>
+</header>
+<main>
+  <section id="guard">
+    <svg id="moon" viewBox="0 0 80 80" aria-hidden="true">
+      <circle id="moonBody" cx="40" cy="40" r="30" fill="#f4e3a1"></circle>
+      <circle id="shade" cx="54" cy="32" r="26" fill="#161a3a"></circle>
+    </svg>
+    <div id="state">สัตว์ปลอดภัย</div>
+    <div id="detail" class="legend">ยังไม่มีเหตุ</div>
+    <button id="ack">รับทราบ ไปดูคอกแล้ว</button>
+    <div class="nums">
+      <div class="num"><b id="count">0</b><span>ผู้บุกรุกคืนนี้</span></div>
+      <div class="num"><b id="quiet">--</b><span>สงบก่อนครั้งล่าสุด</span></div>
+      <div class="num"><b id="armed">--</b><span>ระบบเฝ้า</span></div>
+      <div class="num"><b id="slow">--</b><span>รับทราบช้าสุดคืนนี้ (นาที:วินาที)</span></div>
+    </div>
+  </section>
+  <section id="near">
+    <h2>ใกล้รั้วสุดคืนนี้</h2>
+    <div class="big" id="nearCm">---<small>cm</small></div>
+    <div class="lvl" id="nearLvl">ยังไม่มีผู้บุกรุก</div>
+    <div class="bar"><i id="nearBar"></i></div>
+    <div class="row"><span>ครั้งล่าสุด</span><b id="nearLast">-</b></div>
+    <div class="row"><span>ผู้บุกรุกคืนนี้</span><b id="nearN">0</b></div>
+    <button id="nearReset">ล้างค่า</button>
+  </section>
+  <section id="radarSec">
+    <h2>เรดาร์คอกสัตว์</h2>
+    <div id="radarWrap">
+      <svg id="radar" viewBox="0 0 200 200" aria-label="เรดาร์">
+        <defs>
+          <radialGradient id="rg"><stop offset="0" stop-color="#10132e"/><stop offset="1" stop-color="#0b0d24"/></radialGradient>
+          <linearGradient id="sw" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#6ee7b7" stop-opacity="0"/><stop offset="1" stop-color="#6ee7b7" stop-opacity=".55"/>
+          </linearGradient>
+        </defs>
+        <circle cx="100" cy="100" r="96" fill="url(#rg)" stroke="#2a2f5e"/>
+        <circle id="rRed" cx="100" cy="100" r="23" fill="rgba(255,77,109,.12)" stroke="#ff4d6d" stroke-dasharray="3 3"/>
+        <circle id="rYel" cx="100" cy="100" r="46" fill="none" stroke="#ffb86b" stroke-dasharray="3 3"/>
+        <circle cx="100" cy="100" r="70" fill="none" stroke="#2a2f5e"/>
+        <line x1="4" y1="100" x2="196" y2="100" stroke="#2a2f5e"/><line x1="100" y1="4" x2="100" y2="196" stroke="#2a2f5e"/>
+        <g id="sweep"><path d="M100 100 L196 100 A96 96 0 0 0 187 62 Z" fill="url(#sw)" transform="rotate(-38 100 100)"/></g>
+        <circle cx="100" cy="100" r="3" fill="#f4e3a1"/>
+        <g id="blips"></g>
+      </svg>
+    </div>
+    <div class="legend" style="text-align:center">กลาง = รั้ว/เซนเซอร์ · ขอบนอก = 400 cm · วงแดง = รั้ว (VR3) วงเหลือง = ใกล้รั้ว · มุมของจุดสุ่ม เพราะเซนเซอร์วัดได้แค่ระยะ</div>
+  </section>
+  <section>
+    <h2>เส้นเวลาของคืนนี้ (นับจากเริ่มเฝ้า)</h2>
+    <svg id="line" viewBox="0 0 320 110" aria-label="เส้นเวลา"></svg>
+    <div class="legend">แดง = ผู้บุกรุก (สูง = ใกล้รั้ว) · เขียว = ออกไปแล้ว · ฟ้า = รับทราบ · เทา = เปิด/ปิดเฝ้า</div>
+  </section>
+  <section class="wide">
+    <h2>สมุดเวรยาม <button id="csv" style="float:right;padding:4px 10px">ดาวน์โหลด CSV</button></h2>
+    <div class="table-wrap"><table id="events"><tbody></tbody></table></div>
+  </section>
+</main>
+<footer><p>เปิดหน้านี้ค้างไว้บนมือถือ (กด “เปิดเสียงเตือน” 1 ครั้ง) · iPhone: Safari → แชร์ → เพิ่มไปยังหน้าจอโฮม จะเปิดแบบเต็มจอ</p></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+// PWA: cache the app shell for quicker loading. MQTT still needs internet.
+if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+</script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const BROKER_URL = "wss://broker.hivemq.com:8884/mqtt";
+const ROOT = "bento-aiot";
+const RING_MS = 5000, MAX_CM = 400;
+// การ์ดใกล้รั้วสุด: ปรับให้ตรงกับระยะรั้วที่ตั้งด้วย VR3 บนบอร์ด
+// ค่าเริ่มต้น แล้วบอร์ดจะส่ง "zone" (รั้วจาก VR3) มาทับให้เอง · เหลือง = รั้ว x 150% ตรงกับ NEAR_PCT ในบอร์ด
+let NEAR_RED_CM = 60, NEAR_YELLOW_CM = 90;
+const NEAR_MAX_CM = 400;
+let client = null, team = new URLSearchParams(location.search).get("team") || "";
+let alarm = false, audio = null, ringTimer = 0;
+let alarmAt = 0, slowest = 0;        // วัดว่าคนเฝ้าตื่นมารับทราบช้าแค่ไหน
+let shiftRef = null;                 // {shift_s, at} จาก intruder ล่าสุด ใช้วาง event อื่นบนเส้นเวลา
+let nearMin = null, nearLast = "-", nearN = 0;   // การ์ดใกล้รั้วสุด
+const t0 = Date.now(), marks = [], rows = [];
+
+function num(v, lo, hi) { return (typeof v === "number" && isFinite(v) && v >= lo && v <= hi) ? v : null; }
+function okTeam(t) { return /^team[a-z0-9_]{2,20}$/.test(t) && t !== "teamXX" && t !== "team00"; }
+function mmss(s) { return Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0"); }
+function setStatus(text, cls) { const s = $("status"); s.textContent = text; s.className = cls || ""; }
+
+// เสียงไซเรนสั้น ๆ (เบราว์เซอร์ต้องให้ผู้ใช้กดก่อนถึงจะเล่นเสียงได้)
+function ring() {
+  if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+  if (!audio) return;
+  [880, 660, 880, 660].forEach((f, i) => {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = "square"; o.frequency.value = f; g.gain.value = 0.08;
+    o.connect(g); g.connect(audio.destination);
+    o.start(audio.currentTime + i * 0.18); o.stop(audio.currentTime + i * 0.18 + 0.15);
+  });
+}
+
+function setAlarm(on, text) {
+  alarm = on;
+  document.body.classList.toggle("alarm", on);
+  $("moonBody").setAttribute("fill", on ? "#ff4d6d" : "#f4e3a1");   // พระจันทร์แดง = มีเหตุ
+  clearInterval(ringTimer);
+  if (on) { ring(); ringTimer = setInterval(ring, RING_MS); }
+  if (text) $("state").textContent = text;
+}
+
+// เวลาจากเตือนถึงรับทราบ: คนเฝ้าหลับลึกแค่ไหน
+function noteAck() {
+  if (!alarmAt) return;
+  slowest = Math.max(slowest, (Date.now() - alarmAt) / 1000);
+  alarmAt = 0;
+  $("slow").textContent = mmss(slowest);
+}
+
+// การ์ดใกล้รั้วสุดคืนนี้: ตัวเลขใหญ่ เปลี่ยนสีตามความใกล้
+function nearLevel(cm) {
+  if (cm < NEAR_RED_CM) return ["ใกล้มาก!", "var(--bad)"];
+  if (cm < NEAR_YELLOW_CM) return ["ใกล้รั้ว", "var(--warn)"];
+  return ["ยังห่าง", "var(--safe)"];
+}
+
+function renderNear() {
+  const cm = $("nearCm"), lvl = $("nearLvl"), bar = $("nearBar");
+  if (nearMin === null) {
+    cm.innerHTML = "---<small>cm</small>"; cm.style.color = "var(--dim)";
+    lvl.textContent = "ยังไม่มีผู้บุกรุก"; lvl.style.color = "var(--dim)";
+    bar.style.width = "0"; bar.style.background = "var(--dim)";
+  } else {
+    const [text, col] = nearLevel(nearMin);
+    cm.innerHTML = nearMin + "<small>cm</small>"; cm.style.color = col;
+    lvl.textContent = text; lvl.style.color = col;
+    bar.style.width = Math.max(4, 100 - Math.min(nearMin, NEAR_MAX_CM) * 100 / NEAR_MAX_CM) + "%";   // แถบเต็ม = ใกล้ 0 cm
+    bar.style.background = col;
+  }
+  $("nearLast").textContent = nearLast;
+  $("nearN").textContent = String(nearN);
+}
+
+// ===== เรดาร์: รัศมี 96 = NEAR_MAX_CM =====
+const R_MAX = 96;
+function radarSetup() {
+  $("rRed").setAttribute("r", NEAR_RED_CM / NEAR_MAX_CM * R_MAX);
+  $("rYel").setAttribute("r", NEAR_YELLOW_CM / NEAR_MAX_CM * R_MAX);
+}
+function setZone(z) {
+  const r = Math.round(z);
+  if (r === NEAR_RED_CM) return;
+  NEAR_RED_CM = r; NEAR_YELLOW_CM = Math.round(r * 1.5);
+  radarSetup(); renderNear();
+}
+function addBlip(cm) {
+  if (cm === null) return;
+  const ns = "http://www.w3.org/2000/svg", g = $("blips");
+  const r = Math.min(cm, NEAR_MAX_CM) / NEAR_MAX_CM * R_MAX;
+  const a = Math.random() * Math.PI * 2;
+  const x = 100 + r * Math.cos(a), y = 100 + r * Math.sin(a);
+  const col = cm < NEAR_RED_CM ? "#ff4d6d" : cm < NEAR_YELLOW_CM ? "#ffb86b" : "#6ee7b7";
+  const grp = document.createElementNS(ns, "g"); grp.setAttribute("class", "blip");
+  const ping = document.createElementNS(ns, "circle");
+  ping.setAttribute("class", "ping"); ping.setAttribute("cx", x); ping.setAttribute("cy", y);
+  ping.setAttribute("r", 3); ping.setAttribute("fill", "none"); ping.setAttribute("stroke", col);
+  const dot = document.createElementNS(ns, "circle");
+  dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", 3.5); dot.setAttribute("fill", col);
+  grp.appendChild(ping); grp.appendChild(dot); g.appendChild(grp);
+  setTimeout(() => grp.remove(), 12000);
+  while (g.childNodes.length > 30) g.removeChild(g.firstChild);
+}
+
+function nowShift() {
+  if (!shiftRef) return (Date.now() - t0) / 1000;
+  return shiftRef.shift_s + (Date.now() - shiftRef.at) / 1000;
+}
+
+function drawLine() {
+  const svg = $("line"), ns = "http://www.w3.org/2000/svg";
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const span = Math.max(600, nowShift());       // อย่างน้อย 10 นาที
+  const base = document.createElementNS(ns, "line");
+  base.setAttribute("x1", "10"); base.setAttribute("x2", "310"); base.setAttribute("y1", "90"); base.setAttribute("y2", "90");
+  base.setAttribute("stroke", "#2a2f5e"); base.setAttribute("stroke-width", "2");
+  svg.appendChild(base);
+  [0, 0.5, 1].forEach((f) => {
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", String(10 + f * 290)); t.setAttribute("y", "106"); t.setAttribute("fill", "#8c8fb8");
+    t.setAttribute("font-size", "9"); t.setAttribute("text-anchor", f === 0 ? "start" : f === 1 ? "end" : "middle");
+    t.textContent = mmss(span * f);
+    svg.appendChild(t);
+  });
+  const col = { intruder: "#ff4d6d", clear: "#6ee7b7", ack: "#7aa2ff", armed: "#8c8fb8" };
+  marks.forEach((m) => {
+    const x = 10 + Math.min(1, m.t / span) * 300;
+    const h = m.kind === "intruder" ? 20 + (m.cm === null ? 30 : 60 * (1 - Math.min(m.cm, MAX_CM) / MAX_CM)) : 14;
+    const r = document.createElementNS(ns, "rect");
+    r.setAttribute("x", String(x - 2)); r.setAttribute("width", "4");
+    r.setAttribute("y", String(90 - h)); r.setAttribute("height", String(h));
+    r.setAttribute("fill", col[m.kind] || "#8c8fb8");
+    svg.appendChild(r);
+  });
+}
+
+function logRow(kind, text) {
+  const tb = $("events").tBodies[0], tr = document.createElement("tr");
+  tr.className = kind;
+  [new Date().toLocaleTimeString("th-TH"), text].forEach((v) => { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); });
+  tb.insertBefore(tr, tb.firstChild);
+  while (tb.rows.length > 40) tb.deleteRow(-1);
+}
+
+function onEvent(o) {
+  const ev = typeof o.event === "string" ? o.event.slice(0, 20) : "";
+  const count = num(o.count, 0, 1e6), cm = num(o.cm, 0, 2000);
+  const shift = num(o.shift_s, 0, 1e7), quiet = num(o.quiet_s, 0, 1e7);
+  const zone = num(o.zone, 10, 1000);
+  if (zone !== null) setZone(zone);
+  if (shift !== null) shiftRef = { shift_s: shift, at: Date.now() };
+  if (count !== null) $("count").textContent = String(count);
+  if (ev === "intruder") {
+    if (!alarm) alarmAt = Date.now();
+    setAlarm(true, "มีผู้บุกรุกที่คอก!");
+    $("detail").textContent = "ครั้งที่ " + (count ?? "-") + " ระยะ " + (cm ?? "-") + " cm" + (shift !== null ? " เฝ้ามาแล้ว " + mmss(shift) : "");
+    if (quiet !== null) $("quiet").textContent = mmss(quiet);
+    logRow("intruder", "ผู้บุกรุกครั้งที่ " + (count ?? "-") + " ระยะ " + (cm ?? "-") + " cm");
+    // การ์ดใกล้รั้วสุด
+    nearN = count !== null ? count : nearN + 1;
+    if (cm !== null) {
+      if (nearMin === null || cm < nearMin) nearMin = cm;
+      nearLast = cm + " cm · " + new Date().toLocaleTimeString("th-TH", { hour12: false });
+    }
+    renderNear();
+    addBlip(cm);
+  } else if (ev === "near") {
+    // บอร์ดส่งระยะใกล้สุดใหม่ของคืนนี้ (ไม่นับครั้ง ไม่ลง log กันท่วม)
+    if (cm !== null) {
+      nearMin = cm;
+      nearLast = cm + " cm · " + new Date().toLocaleTimeString("th-TH", { hour12: false });
+      renderNear();
+    }
+  } else if (ev === "clear") {
+    $("state").textContent = alarm ? "ออกไปแล้ว แต่ยังไม่มีคนรับทราบ" : "สัตว์ปลอดภัย";
+    logRow("clear", "ผู้บุกรุกออกไปแล้ว (รวม " + (count ?? "-") + ")");
+  } else if (ev === "ack") {
+    noteAck();
+    setAlarm(false, "รับทราบแล้ว (" + String(o.by ?? "-").slice(0, 8) + ")");
+    logRow("ack", "รับทราบโดย " + String(o.by ?? "-").slice(0, 8));
+  } else if (ev === "armed") {
+    const on = o.on === 1 ? 1 : o.on === 0 ? 0 : null;
+    $("armed").textContent = on === 1 ? "เปิด" : on === 0 ? "ปิด" : "--";
+    if (on === 0) setAlarm(false, "ปิดระบบเฝ้า");
+    if (on === 1 && !alarm) $("state").textContent = "สัตว์ปลอดภัย";
+    logRow("armed", on === 1 ? "เปิดระบบเฝ้า" : "ปิดระบบเฝ้า");
+  } else {
+    logRow("other", "event อื่น: " + JSON.stringify(o).slice(0, 80));
+  }
+  if (["intruder", "clear", "ack", "armed"].includes(ev)) marks.push({ kind: ev, t: shift ?? nowShift(), cm });
+  drawLine();
+  rows.push([new Date().toISOString(), ev, count, cm, shift, quiet, o.by === undefined ? "" : String(o.by).slice(0, 8), o.on === 1 || o.on === 0 ? o.on : ""]);
+}
+
+function connect() {
+  team = $("team").value.trim();
+  if (!okTeam(team)) { setStatus("ใส่เลขทีม เช่น team05", "bad"); return; }
+  history.replaceState(null, "", "?team=" + encodeURIComponent(team));
+  if (client) client.end(true);
+  setStatus("กำลังต่อ broker...", "");
+  client = mqtt.connect(BROKER_URL, { clientId: "nightpen-" + Math.random().toString(16).slice(2, 10), connectTimeout: 20000 });
+  client.on("connect", () => { setStatus("ต่อแล้ว ฟัง " + ROOT + "/" + team + "/#", "ok"); client.subscribe(ROOT + "/" + team + "/#"); });
+  client.on("reconnect", () => setStatus("ต่อใหม่...", ""));
+  client.on("error", () => setStatus("ต่อ broker ไม่ได้", "bad"));
+  client.on("message", (topic, payload) => {
+    let o;
+    try { o = JSON.parse(payload.toString()); } catch (e) { return; }
+    if (!o || typeof o !== "object" || Array.isArray(o)) return;
+    if (String(topic.split("/").pop()) === "event") onEvent(o);
+  });
+}
+
+$("ack").addEventListener("click", () => {
+  if (!client || !client.connected) { setStatus("ยังไม่ได้ต่อ broker", "bad"); return; }
+  client.publish(ROOT + "/" + team + "/cmd", JSON.stringify({ cmd: "ack" }));
+  setAlarm(false, "ส่งรับทราบแล้ว รอบอร์ดตอบ");
+});
+$("go").addEventListener("click", connect);
+$("team").addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
+$("nearReset").addEventListener("click", () => { nearMin = null; nearLast = "-"; nearN = 0; renderNear(); });
+setInterval(drawLine, 10000);
+
+$("csv").addEventListener("click", () => {
+  const head = ["time", "event", "count", "cm", "shift_s", "quiet_s", "by", "on"];
+  const esc = (v) => { const s = v === null || v === undefined ? "" : String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const lines = [head.join(",")].concat(rows.map((r) => r.map(esc).join(",")));
+  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "night_pen_" + (team || "team") + ".csv";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+$("team").value = team;
+drawLine();
+renderNear();
+radarSetup();
+if (okTeam(team)) connect();
+
+// ===== ส่วนเสริมสำหรับมือถือ =====
+const KEY = "nightpen_team";
+function unlockAudio() {
+  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume();
+        $("sound").textContent = "เสียงเตือนเปิดอยู่"; $("sound").classList.add("on"); } catch (e) {}
+}
+// iOS ต้องมีการแตะก่อนถึงจะเล่นเสียงได้ แตะตรงไหนก็ปลดล็อกให้
+document.addEventListener("touchend", () => { if (!audio) unlockAudio(); }, { once: true });
+$("sound").addEventListener("click", () => { unlockAudio(); ring(); });
+
+let wake = null;
+async function setWake(on) {
+  try {
+    if (on) { wake = await navigator.wakeLock.request("screen"); wake.addEventListener("release", () => $("wakeBtn").classList.remove("on")); $("wakeBtn").classList.add("on"); $("wakeBtn").textContent = "จอไม่ดับ"; }
+    else if (wake) { await wake.release(); wake = null; $("wakeBtn").textContent = "กันจอดับ"; }
+  } catch (e) { setStatus("เครื่องนี้กันจอดับไม่ได้", "bad"); }
+}
+$("wakeBtn").addEventListener("click", () => setWake(!wake));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    if ($("wakeBtn").classList.contains("on") === false && wake) setWake(true);
+    if (client && !client.connected) client.reconnect && client.reconnect();
+  }
+});
+
+// จำเลขทีมไว้ ไม่ต้องพิมพ์ใหม่ทุกครั้ง
+function saveTeam() { if (okTeam(team)) { try { localStorage.setItem(KEY, team); } catch (e) {} } }
+$("go").addEventListener("click", saveTeam);
+$("team").addEventListener("keydown", (e) => { if (e.key === "Enter") saveTeam(); });
+saveTeam();
+if (!okTeam(team)) { try { const t = localStorage.getItem(KEY); if (t) { $("team").value = t; team = t; } } catch (e) {} }
+if (okTeam(team) && !client) { $("team").value = team; connect(); saveTeam(); }
+</script>
+</body></html>
